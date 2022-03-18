@@ -81,22 +81,48 @@ phina.define( 'MyBall', {
         const result = this.collisionResult;
 
         const v = this.vector.clone().normalize();
-        let dx = 0, dy = 0;
+        let t = 0;
         if ( result.type === 'vertex' ) {
-            dx = result.vertex.x - result.circle.x,
-            dy = result.vertex.y - result.circle.y;
+            t = result.circle.radius * 2;
+            let step = t / 2;
+            let dist = Vector2.distance(
+                result.vertex, Vector2.sub(result.circle, Vector2.mul(v, t)) );
+            for (let i=0; i<5; i++) {
+                const delta = Vector2.mul( v, t - step );
+                const dist2 = Vector2.distance( result.vertex, Vector2.sub(result.circle, delta) );
+
+                if ( result.circle.radius <= dist2 && dist2 < dist ) {
+                    const factor = (dist - dist2) / step;
+                    dist = dist2;
+                    t = t - step;
+
+                    step = (dist - result.circle.radius) / factor;
+                }
+                else {
+                    step *= 0.5;
+                }
+
+                if ( (dist - result.circle.radius) < 0.01 || step < 0.01 ) {
+                    break;
+                }
+            }
+
+            // 線分同様に、接触直前に位置するように調整
+            if ( (result.circle.radius - dist) < 0.01 ) {
+                t += ( 0.01 - (result.circle.radius - dist) );
+            }
         }
         else if ( result.type === 'segment' ) {
-            dx = result.p2.x - result.circle.x;
-            dy = result.p2.y - result.circle.y;
-        }
+            const dx = result.p2.x - result.circle.x;
+            const dy = result.p2.y - result.circle.y;
 
-        const normal = Vector2(dx, dy).normalize();
-        const t = result.error / v.dot(normal);
+            const normal = Vector2(dx, dy).normalize();
+            t = (result.error + 0.01) / v.dot(normal); // 接触直前にする
+        }
 
         // 接触直前まで位置を補正
         v.negate();
-        const tmp = Vector2.mul( v, t + 0.001 );
+        const tmp = Vector2.mul( v, t );
         this.x += tmp.x;
         this.y += tmp.y;
 
@@ -521,10 +547,6 @@ phina.define( 'MainScene', {
                     return collided;
                 } );
             } );
-
-            if ( 0 < balls.length ) {
-                console.log("collided balls: " + balls.length)
-            }
         }
 
         // 画面外に出たミサイルの回収
